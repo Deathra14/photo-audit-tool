@@ -3,7 +3,9 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from photo_audit.core import audit, discover_photos, normalize_id, read_ids, write_reports
+from photo_audit.core import (
+    audit, discover_photos, find_content_duplicates, normalize_id, read_ids, write_reports,
+)
 
 
 class CoreTests(unittest.TestCase):
@@ -39,6 +41,24 @@ class CoreTests(unittest.TestCase):
             summary = write_reports(*audit(["X1"], {}), report)
             self.assertEqual(summary["MISSING"], 1)
             self.assertTrue((report / "summary.json").is_file())
+            self.assertTrue((report / "report.html").is_file())
+
+    def test_content_duplicate_detection(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            first, second, different = root / "one.jpg", root / "two.jpg", root / "three.jpg"
+            first.write_bytes(b"same photo bytes")
+            second.write_bytes(b"same photo bytes")
+            different.write_bytes(b"different")
+            groups = find_content_duplicates([first, second, different])
+            self.assertEqual([[path.name for path in group] for group in groups], [["one.jpg", "two.jpg"]])
+
+    def test_custom_prefix_separator(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            (root / "ASSET-02.png").touch()
+            photos = discover_photos(root, match_prefix=True, prefix_separator="-")
+            self.assertIn("asset", photos)
 
 
 if __name__ == "__main__":
